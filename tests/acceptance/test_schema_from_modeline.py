@@ -85,6 +85,25 @@ name: example
     run_line_simple(["--schema-from-modeline", str(config)])
 
 
+def test_schema_from_modeline_validates_each_yaml_document(run_line, tmp_path):
+    schema = tmp_path / "schema.json"
+    schema.write_text(json.dumps({"type": "object", "required": ["name"]}))
+
+    config = tmp_path / "config.yaml"
+    config.write_text("""\
+# yaml-language-server: $schema=schema.json
+---
+name: ok
+---
+count: 1
+""")
+
+    result = run_line(["check-jsonschema", "--schema-from-modeline", str(config)])
+
+    assert result.exit_code == 1
+    assert f"{config}:5::$: 'name' is a required property" in result.stdout
+
+
 def test_schema_from_modeline_preserves_top_level_yaml_lists(
     run_line_simple, tmp_path
 ):
