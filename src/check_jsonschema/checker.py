@@ -9,8 +9,7 @@ import referencing.exceptions
 
 from . import format_errors
 from .formats import FormatOptions
-from .instance_loader import InstanceLoader
-from .parsers import ParseError
+from .instance_loader import InstanceLoader, InstanceParseError
 from .regex_variants import RegexImplementation
 from .reporter import Reporter
 from .result import CheckResult
@@ -51,11 +50,20 @@ class SchemaChecker:
         raise _Exit(1)
 
     def get_validator(
-        self, path: pathlib.Path | str, doc: dict[str, t.Any]
+        self,
+        path: pathlib.Path | str,
+        doc: t.Any,
+        *,
+        schemafile: str | None = None,
     ) -> jsonschema.protocols.Validator:
         try:
             return self._schema_loader.get_validator(
-                path, doc, self._format_opts, self._regex_impl, self._fill_defaults
+                path,
+                doc,
+                self._format_opts,
+                self._regex_impl,
+                self._fill_defaults,
+                schemafile=schemafile,
             )
         except SchemaParseError as e:
             self._fail("Error: schemafile could not be parsed as JSON", e)
@@ -68,17 +76,21 @@ class SchemaChecker:
 
     def _build_result(self) -> CheckResult:
         result = CheckResult()
-        for path, data in self._instance_loader.iter_files():
-            if isinstance(data, ParseError):
-                result.record_parse_error(path, data)
+        for instance in self._instance_loader.iter_documents():
+            if isinstance(instance, InstanceParseError):
+                result.record_parse_error(instance.filename, instance.error)
             else:
-                validator = self.get_validator(path, data)
+                validator = self.get_validator(
+                    instance.filename,
+                    instance.data,
+                    schemafile=instance.schemafile,
+                )
                 passing = True
-                for err in validator.iter_errors(data):
-                    result.record_validation_error(path, err)
+                for err in validator.iter_errors(instance.data):
+                    result.record_validation_error(instance.label, err)
                     passing = False
                 if passing:
-                    result.record_validation_success(path)
+                    result.record_validation_success(instance.label)
         return result
 
     def _run(self) -> None:

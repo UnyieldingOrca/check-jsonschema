@@ -188,6 +188,16 @@ a:
     assert data == [(str(f), {"a": {"b": [1, 2], "c": "d"}})]
 
 
+def test_instanceloader_schema_from_modeline_skips_unannotated_files(
+    tmp_path, open_wide
+):
+    f = tmp_path / "foo.yaml"
+    f.write_text("a: b")
+    loader = InstanceLoader(open_wide(f), schema_from_modeline=True)
+
+    assert list(loader.iter_documents()) == []
+
+
 @pytest.mark.parametrize(
     "file_format, filename, content",
     [
