@@ -82,7 +82,16 @@ class InstanceLoader:
         if raw_schemafile is None:
             return None
         try:
+<<<<<<< HEAD
             schemafile = resolve_modeline_schema_location(raw_schemafile, name)
             return schemafile
         except ValueError as err:
             raise ParseError(str(err))
+=======
+            schemafile = resolve_modeline_schema_location(
+                raw_schemafile, name
+            )
+            return schemafile
+        except ValueError as err:
+            raise ParseError(str(err))
+>>>>>>> 2712d75 (feat: Add YAML schema modeline support)
