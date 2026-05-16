@@ -8,6 +8,7 @@ from check_jsonschema.cli.param_types import CustomLazyFile
 
 from .modeline import extract_yaml_modeline_schema, resolve_modeline_schema_location
 from .parsers import ParseError, ParserSet
+from .parsers.metadata import MultiDocumentData, ParsedDocument
 from .transforms import Transform
 
 
@@ -15,11 +16,14 @@ from .transforms import Transform
 class InstanceDocument:
     filename: str
     data: t.Any
+    line: int | None = None
     schemafile: str | None = None
 
     @property
     def label(self) -> str:
-        return self.filename
+        if self.line is None:
+            return self.filename
+        return f"{self.filename}:{self.line}"
 
 
 @dataclass(frozen=True)
@@ -55,6 +59,19 @@ class InstanceLoader:
         self._parsers = ParserSet(
             modify_yaml_implementation=self._data_transform.modify_yaml_implementation
         )
+
+    def _apply_data_transform(self, data: t.Any) -> t.Any:
+        if isinstance(data, MultiDocumentData):
+            return MultiDocumentData(
+                tuple(
+                    ParsedDocument(
+                        data=self._data_transform(document.data),
+                        line=document.line,
+                    )
+                    for document in data.documents
+                )
+            )
+        return self._data_transform(data)
 
     def _iter_loaded_files(self) -> t.Iterator[LoadedFile]:
         for file in self._files:
@@ -96,7 +113,7 @@ class InstanceLoader:
                 except ParseError as err:
                     data = err
                 else:
-                    data = self._data_transform(data)
+                    data = self._apply_data_transform(data)
             finally:
                 file.close()
             yield LoadedFile(name, data, schemafile=schemafile)
@@ -109,6 +126,14 @@ class InstanceLoader:
         for loaded_file in self._iter_loaded_files():
             if isinstance(loaded_file.data, ParseError):
                 yield InstanceParseError(loaded_file.filename, loaded_file.data)
+            elif isinstance(loaded_file.data, MultiDocumentData):
+                for document in loaded_file.data.documents:
+                    yield InstanceDocument(
+                        filename=loaded_file.filename,
+                        data=document.data,
+                        line=document.line,
+                        schemafile=loaded_file.schemafile,
+                    )
             else:
                 yield InstanceDocument(
                     filename=loaded_file.filename,
